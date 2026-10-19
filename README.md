@@ -14,22 +14,9 @@ conda create -n dualcracknet python=3.8 -y
 conda activate dualcracknet
 
 python -m pip install "pip<25.1"
-python -m pip install torch==1.11.0+cu113 torchvision==0.12.0+cu113 \
-  --extra-index-url https://download.pytorch.org/whl/cu113
+python -m pip install -r requirements.txt
 
-python -m pip install \
-  numpy==1.24.4 Pillow==10.4.0 \
-  scipy==1.10.1 scikit-image==0.21.0 scikit-learn==1.3.2 \
-  opencv-python-headless==4.10.0.84 \
-  albumentations==1.4.18 albucore==0.0.17 \
-  pandas==2.0.3 matplotlib==3.7.5
-
-python -c "import torch; print('PyTorch:', torch.__version__); print('CUDA:', torch.version.cuda); print('Available:', torch.cuda.is_available())"
-python train.py --help
-python evaluate/evaluate.py --help
 ```
-
-The PyTorch/CUDA package pairing follows the [official previous-version installation instructions](https://pytorch.org/get-started/previous-versions/). A CUDA-capable NVIDIA driver is required for GPU training.
 
 ## Datasets
 
