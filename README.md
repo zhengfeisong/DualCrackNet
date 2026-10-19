@@ -2,11 +2,9 @@
 
 Code for **Robust and Real-time Road Crack Detection through Collaborative Dual-Branch Learning on Robotic Sensing Platform**, IEEE RCAR 2025.
 
-DualCrackNet performs road crack segmentation with collaborative dual-branch learning. The implementation is adapted from HrSegNet; see the attribution in `model/dualcracknet.py`.
-
 ## Environment
 
-Recent training and evaluation were run on Linux with Python 3.8, PyTorch 1.11.0+cu113, Albumentations 1.4.18, and an NVIDIA RTX 3090. The commands below provide a pinned installation recipe; the supporting package versions are not a complete export of the original experiment environment.
+Training and evaluation can be run on Linux with Python 3.8, PyTorch 1.11.0+cu113, Albumentations 1.4.18, and an NVIDIA RTX 3090.
 
 ```bash
 git clone https://github.com/zhengfeisong/DualCrackNet.git
@@ -43,7 +41,7 @@ The dataset is included in `RCD900/`, with 630 training images, 135 validation i
 
 ### DeepCrack
 
-The code also supports a locally prepared DeepCrack dataset. The split used in recent experiments contains 210 training, 90 validation, and 237 test images. DeepCrack is not included in this repository; prepare it separately in the same directory structure below.
+[DeepCrack dataset](https://github.com/yhlleo/DeepCrack/tree/master/dataset)
 
 ### Directory structure and bounding-box annotations
 
@@ -63,9 +61,7 @@ RCD900/                       # Or Deepcrack/
     └── box/
 ```
 
-Use RGB images and binary masks with background 0 and crack 255. Images and masks must have matching filenames/stems and sort order. Each bounding-box text file must share the image stem and contain one line: `x_min y_min width height`, in pixel coordinates.
-
-**Generate bounding boxes before training or evaluation.** The repository includes RCD900 images and masks; the current data loader requires `box/` annotations in all three splits, including the test split. The following command creates one union bounding box enclosing all crack pixels in each mask:
+**Generate bounding boxes before training or evaluation.**
 
 ```bash
 python - <<'PYBOX'
@@ -78,16 +74,17 @@ for split in ("train", "val", "test"):
 PYBOX
 ```
 
-Test boxes are required by the shared data loader; evaluation predictions are obtained from the segmentation output without ground-truth box cropping.
-
 ## Training
 
-Run commands from the repository root. Train on RCD900:
+Run from the repository root. Set `datapath` and `savepath` to your dataset and output directories.
 
 ```bash
+datapath=/path/to/dataset
+savepath=/path/to/output
+
 CUDA_VISIBLE_DEVICES=0 python -u train.py \
-  --data_root ./RCD900 \
-  --savepath ./runs/rcd900 \
+  --data_root "$datapath" \
+  --savepath "$savepath" \
   --device cuda:0 \
   --n_epochs 200 \
   --batch_size 8 \
@@ -97,56 +94,16 @@ CUDA_VISIBLE_DEVICES=0 python -u train.py \
   --save_freq 50
 ```
 
-For DeepCrack, use the same command with `--data_root ./Deepcrack` and `--savepath ./runs/deepcrack`.
-
-Training uses Adam with weight decay 0. The learning rate at zero-based epoch `epoch` is `initial_lr * 0.99**epoch`. The legacy arguments `--weight_decay`, `--gamma`, and `--n_steps` are retained for compatibility but do not affect training.
-
-Each run creates a timestamped directory under `--savepath`:
-
-```text
-runs/rcd900/<timestamp>/
-├── best_model.pth
-├── model_epoch_50.pth
-├── model_epoch_100.pth
-├── model_epoch_150.pth
-└── model_epoch_200.pth
-```
-
-Validation runs every five epochs. `best_model.pth` is selected by validation F1. Periodic weights are saved according to `--save_freq`. The model uses the implementation's default `base=64`.
-
-`--resume_model /path/to/model.pth` initializes model weights only; optimizer state and the epoch counter start fresh. Independent runs can produce different results because training does not fix a random seed. Select checkpoints using validation results.
-
 ## Evaluation
 
-Evaluate one checkpoint on the test split and export predictions:
+Set `checkpoint` to a weight file or a directory containing multiple weights.
 
 ```bash
+datapath=/path/to/dataset
+checkpoint=/path/to/checkpoint_or_directory
+
 CUDA_VISIBLE_DEVICES=0 python -u evaluate/evaluate.py \
-  --data-root ./RCD900 \
-  --checkpoint ./runs/rcd900/<timestamp>/best_model.pth \
+  --data-root "$datapath" \
+  --checkpoint "$checkpoint" \
   --device cuda:0
 ```
-
-Replace `<timestamp>` with the actual run directory name. To evaluate every `.pth` or `.pt` file directly inside a run directory:
-
-```bash
-CUDA_VISIBLE_DEVICES=0 python -u evaluate/evaluate.py \
-  --data-root ./RCD900 \
-  --checkpoint ./runs/rcd900/<timestamp> \
-  --device cuda:0
-```
-
-For DeepCrack, replace the dataset and checkpoint paths with `./Deepcrack` and the corresponding training output. Optional arguments include `--output-dir ./evaluation_results`, `--workers 0`, and `--threshold 0.5`.
-
-By default, each checkpoint produces a directory next to the weight file:
-
-```text
-<run directory>/
-├── best_model.pth
-├── best_model/
-│   ├── predictions/            # Binary PNG masks: 0 or 255
-│   └── metrics.json
-└── test_summary.json           # Summary for all evaluated checkpoints
-```
-
-Evaluation uses batch size 1, the original image size, and a default probability threshold of 0.5. Precision, recall, accuracy, F1, crack IoU, and mean crack/background IoU are calculated from the accumulated test-set confusion matrix. JSON files contain both fractional metrics and percentage metrics. Existing results at the same output paths are overwritten.
